@@ -30,6 +30,14 @@ loader_info_var = "LoaderInfo"
 loader_entry_one_shot_var = "LoaderEntryOneShot"
 loader_entry_default_var = "LoaderEntryDefault"
 
+# efi_linux_dir is the fixed UEFI-style (backslash) directory composefs-boot's own
+# `write_t2_simple` always writes UKI images under (`EFI/Linux/`, hardcoded upstream, not
+# configurable) — used to build the file-path device-path segment when genesis registers a
+# UEFI Boot#### entry for a UKI slot, so the entry's path always matches where the image
+# actually lands.
+[uki]
+efi_linux_dir = "\\EFI\\Linux\\"
+
 # source is the fixed, package-convention path (source-tree-relative) where systemd's own
 # packaging always installs its EFI binary — used by genesis to copy the loader onto a brand-new
 # ESP that doesn't have one yet (install/update never need this, the binary is already on the ESP
