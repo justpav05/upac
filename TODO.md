@@ -10,12 +10,17 @@ Near-term, concrete items. See `ROADMAP.md` for the bigger picture.
 
 ## upac-lib
 
-Test-coverage pass in progress, going file by file through the non-command core first
-(`errors.rs`/`lock.rs`/`search.rs`/`fs.rs`/`orchestrator/*`/`database/*`/`deploy/*`/`scripts/*`/
-`plugin/decoder/{error,manifest,triggers}.rs`/`plugin/boot/{error,manifest}.rs` done —
-`plugin/decoder/unpack.rs`/`plugin/decoder/mod.rs`/`plugin/boot/mod.rs` skipped, need a real
-dlopen'd/`builtin-*` plugin), commands (`mutated`/`unmutated`) last. Remaining core files not yet
-visited: `composefs/{diff,error,mod}.rs`, `config/mod.rs`, `boot/{error,mod}.rs`.
+Test-coverage pass in progress. The entire non-command core is covered (`errors.rs`/`lock.rs`/
+`search.rs`/`fs.rs`/`orchestrator/*`/`database/*`/`deploy/*`/`scripts/*`/`composefs/*`/`config/*`/
+`boot/*`/`plugin/decoder/{error,manifest,triggers}.rs`/`plugin/boot/{error,manifest}.rs`), except
+`plugin/decoder/unpack.rs`/`plugin/decoder/mod.rs`/`plugin/boot/mod.rs` (need a real dlopen'd/
+`builtin-*` plugin) and `deploy/esp.rs` (real mount table) — both explicit, justified skips. Every
+`mutated`/`unmutated` command's own `<Command>Error` enum is also now covered (inline tests next to
+each `error.rs`, since `mutated`/`unmutated` aren't `pub`) — only each variant's own logic, not the
+macro-generated `Common(...)` delegation shared with `errors.rs`'s already-tested `CommonError`.
+Remaining: the `Stage::run()` bodies themselves — each needs a real composefs `Repository`/`Deploy`/
+database in context, likely out of scope for unit tests unless a pure-logic helper turns out to be
+extractable.
 
 **UKI A/B boot (`upac-from.efi`/`upac-to.efi`) confirm-boot service not designed yet**: after a
 successful boot, something needs to confirm once, swap `to`↔`from`, and set the normal persistent
@@ -26,17 +31,3 @@ boot order. Nothing calls `Booter::confirm_boot` anywhere yet; this belongs to a
 `esp_loader_source`), grub needs a real `grub-install`-equivalent (target-specific generated
 `grubx64.efi`, not a plain file copy) — out of scope for now; either shell out to `grub-install`
 against the mounted ESP, or explicitly document grub as unsupported for genesis whole-disk mode.
-
-**Genesis-produced disks don't actually boot into the installed system yet**: a plain partition
-mount isn't how composefs systems boot — nothing in this project resolves `composefs.digest=<hash>`
-(the kernel cmdline param `write_boot_entry` already writes) against the on-disk repository, mounts
-the erofs image with fs-verity, and overlays `state/deploy/<digest>/etc/`. **Found a real, existing
-upstream tool for exactly this**: `composefs-setup-root` (crates.io, same `composefs-rs`
-project/version as our `composefs`/`composefs-boot` deps) — a Rust binary, not something we'd write
-ourselves. What's still missing: the actual boot-time integration — the live VM's initramfs is
-systemd-based (mkinitcpio's `systemd` hook, not classic busybox-style hooks), so this needs a
-systemd unit ordered between `sysroot.mount` and `initrd-switch-root.target` (same role as ostree's
-`ostree-prepare-root.service`), not a classic mkinitcpio hook script. Also unresolved: whether upac
-needs to ship/package this integration itself, or whether it's expected to already exist on the
-source distro (same assumption as the systemd-boot/rEFInd binary copy above) — needs checking
-whether Arch/AUR already has a package for this.
