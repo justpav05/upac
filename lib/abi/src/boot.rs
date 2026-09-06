@@ -20,6 +20,8 @@ pub type EspLoaderSourceFn = unsafe extern "C" fn() -> CSlice;
 
 pub type RegisterBootSlotsFn = unsafe extern "C" fn(request: *const CBootSlotsRequest, err_out: *mut ErrorKind) -> i32;
 
+pub type InstallFn = unsafe extern "C" fn(request: *const CBootPluginRequest, err_out: *mut ErrorKind) -> i32;
+
 pub trait Booter: Sized {
     type Error;
 
@@ -36,6 +38,8 @@ pub trait Booter: Sized {
         &mut self, esp_partition_number: u32, esp_starting_lba: u64, esp_ending_lba: u64,
         esp_unique_partition_guid: [u8; 16], to_slot: &str, from_slot: &str,
     ) -> Result<(), Self::Error>;
+
+    fn install(&mut self, esp_mount_point: &str) -> Result<(), Self::Error>;
 }
 
 #[repr(C)]
@@ -43,7 +47,7 @@ pub trait Booter: Sized {
 pub struct CBootPluginRequest {
     pub struct_size: usize,
 
-    pub entry_name: CSlice,
+    pub value: CSlice,
 }
 
 #[repr(C)]
