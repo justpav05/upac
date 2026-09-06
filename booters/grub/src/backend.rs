@@ -35,6 +35,22 @@ impl Booter for Grub {
     fn confirm_boot(&mut self, entry_name: &str) -> Result<(), GrubError> {
         self.run_first_available([SET_DEFAULT_BIN_PRIMARY, SET_DEFAULT_BIN_FALLBACK], entry_name)
     }
+
+    fn register_boot_slots(
+        &mut self, esp_partition_number: u32, esp_starting_lba: u64, esp_ending_lba: u64,
+        esp_unique_partition_guid: [u8; 16], to_slot: &str, from_slot: &str,
+    ) -> Result<(), GrubError> {
+        let _ = (
+            esp_partition_number,
+            esp_starting_lba,
+            esp_ending_lba,
+            esp_unique_partition_guid,
+            to_slot,
+            from_slot,
+        );
+
+        Ok(())
+    }
 }
 
 impl Grub {
