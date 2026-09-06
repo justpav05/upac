@@ -84,7 +84,7 @@ pub unsafe extern "C" fn confirm_boot(request: *const CBootPluginRequest, err_ou
 }
 
 /// # Safety
-/// Touches no pointers — grub has no Boot#### entries to register, always succeeds.
+/// Touches no pointers — systemd-boot has no Boot#### entries to register, always succeeds.
 #[cfg_attr(feature = "cdylib", unsafe(no_mangle))]
 pub unsafe extern "C" fn register_boot_slots(_request: *const CBootSlotsRequest, _err_out: *mut ErrorKind) -> i32 {
     0
