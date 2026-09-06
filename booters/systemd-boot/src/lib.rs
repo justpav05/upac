@@ -90,8 +90,16 @@ pub unsafe extern "C" fn register_boot_slots(_request: *const CBootSlotsRequest,
     0
 }
 
+/// # Safety
+/// Touches no pointers — systemd-boot has nothing to install onto a pre-existing ESP, always
+/// succeeds (its binary is copied from the source package tree via `esp_loader_source` instead).
+#[cfg_attr(feature = "cdylib", unsafe(no_mangle))]
+pub unsafe extern "C" fn install(_request: *const CBootPluginRequest, _err_out: *mut ErrorKind) -> i32 {
+    0
+}
+
 fn entry_name_from_request(request: &CBootPluginRequest) -> Result<String, BlsError> {
-    let bytes = unsafe { request.entry_name.as_borrowed() };
+    let bytes = unsafe { request.value.as_borrowed() };
 
     from_utf8(bytes)
         .map(str::to_owned)

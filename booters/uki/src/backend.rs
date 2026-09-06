@@ -119,6 +119,12 @@ impl Booter for Uki {
 
         Ok(())
     }
+
+    fn install(&mut self, esp_mount_point: &str) -> Result<(), UkiError> {
+        let _ = esp_mount_point;
+
+        Ok(())
+    }
 }
 
 impl Uki {

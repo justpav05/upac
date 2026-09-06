@@ -82,6 +82,12 @@ impl Booter for Bls {
 
         Ok(())
     }
+
+    fn install(&mut self, esp_mount_point: &str) -> Result<(), BlsError> {
+        let _ = esp_mount_point;
+
+        Ok(())
+    }
 }
 
 impl Bls {

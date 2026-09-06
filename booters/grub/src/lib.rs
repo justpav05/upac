@@ -49,7 +49,7 @@ pub unsafe extern "C" fn set_one_shot(request: *const CBootPluginRequest, err_ou
         return -1;
     }
 
-    let result = entry_name_from_request(unsafe { &*request })
+    let result = string_from_request(unsafe { &*request })
         .and_then(|entry_name| Grub::new().and_then(|mut grub| grub.set_one_shot(&entry_name)));
 
     match result {
@@ -71,7 +71,7 @@ pub unsafe extern "C" fn confirm_boot(request: *const CBootPluginRequest, err_ou
         return -1;
     }
 
-    let result = entry_name_from_request(unsafe { &*request })
+    let result = string_from_request(unsafe { &*request })
         .and_then(|entry_name| Grub::new().and_then(|mut grub| grub.confirm_boot(&entry_name)));
 
     match result {
@@ -90,8 +90,30 @@ pub unsafe extern "C" fn register_boot_slots(_request: *const CBootSlotsRequest,
     0
 }
 
-fn entry_name_from_request(request: &CBootPluginRequest) -> Result<String, GrubError> {
-    let bytes = unsafe { request.entry_name.as_borrowed() };
+/// # Safety
+/// `request`, if non-null, must point to a valid, initialized `CBootPluginRequest` for the
+/// duration of the call. `err_out`, if non-null, must point to writable `ErrorKind` storage.
+#[cfg_attr(feature = "cdylib", unsafe(no_mangle))]
+pub unsafe extern "C" fn install(request: *const CBootPluginRequest, err_out: *mut ErrorKind) -> i32 {
+    if request.is_null() {
+        write_error(err_out, GrubError::InvalidRequest);
+        return -1;
+    }
+
+    let result = string_from_request(unsafe { &*request })
+        .and_then(|esp_mount_point| Grub::new().and_then(|mut grub| grub.install(&esp_mount_point)));
+
+    match result {
+        Ok(()) => 0,
+        Err(error) => {
+            write_error(err_out, error);
+            -1
+        }
+    }
+}
+
+fn string_from_request(request: &CBootPluginRequest) -> Result<String, GrubError> {
+    let bytes = unsafe { request.value.as_borrowed() };
 
     from_utf8(bytes)
         .map(str::to_owned)

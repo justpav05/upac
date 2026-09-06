@@ -80,6 +80,12 @@ impl Booter for Refind {
 
         Ok(())
     }
+
+    fn install(&mut self, esp_mount_point: &str) -> Result<(), RefindError> {
+        let _ = esp_mount_point;
+
+        Ok(())
+    }
 }
 
 impl Refind {
