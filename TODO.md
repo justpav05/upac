@@ -11,11 +11,11 @@ Near-term, concrete items. See `ROADMAP.md` for the bigger picture.
 ## upac-lib
 
 Test-coverage pass in progress, going file by file through the non-command core first
-(`errors.rs`/`lock.rs`/`search.rs`/`fs.rs`/`orchestrator/*`/`database/*` done), commands
-(`mutated`/`unmutated`) last. Remaining core files not yet visited: `deploy/{error,retention,mod}.rs`
-(`esp.rs` skipped — real mount), `scripts/{error,file,load,pipeline,primitive}.rs`,
-`plugin/decoder/{error,unpack,mod}.rs`, `plugin/boot/{error,manifest,mod}.rs`,
-`composefs/{diff,error,mod}.rs`, `config/mod.rs`, `boot/{error,mod}.rs`.
+(`errors.rs`/`lock.rs`/`search.rs`/`fs.rs`/`orchestrator/*`/`database/*`/`deploy/*`/`scripts/*`/
+`plugin/decoder/{error,manifest,triggers}.rs`/`plugin/boot/{error,manifest}.rs` done —
+`plugin/decoder/unpack.rs`/`plugin/decoder/mod.rs`/`plugin/boot/mod.rs` skipped, need a real
+dlopen'd/`builtin-*` plugin), commands (`mutated`/`unmutated`) last. Remaining core files not yet
+visited: `composefs/{diff,error,mod}.rs`, `config/mod.rs`, `boot/{error,mod}.rs`.
 
 **UKI A/B boot (`upac-from.efi`/`upac-to.efi`) confirm-boot service not designed yet**: after a
 successful boot, something needs to confirm once, swap `to`↔`from`, and set the normal persistent
