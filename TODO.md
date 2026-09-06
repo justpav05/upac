@@ -26,8 +26,3 @@ extractable.
 successful boot, something needs to confirm once, swap `to`↔`from`, and set the normal persistent
 boot order. Nothing calls `Booter::confirm_boot` anywhere yet; this belongs to a not-yet-designed
 "confirm boot" systemd service, not genesis or the ordinary install/update pipeline.
-
-**grub genesis support still not handled**: unlike systemd-boot/rEFInd (binary-copy via
-`esp_loader_source`), grub needs a real `grub-install`-equivalent (target-specific generated
-`grubx64.efi`, not a plain file copy) — out of scope for now; either shell out to `grub-install`
-against the mounted ESP, or explicitly document grub as unsupported for genesis whole-disk mode.
