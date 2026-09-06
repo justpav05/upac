@@ -36,6 +36,10 @@ pub mod error;
 pub mod esp;
 pub mod retention;
 
+#[cfg(test)]
+#[path = "../../tests/inline/deploy.rs"]
+mod tests;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeployMode {
     ReadOnly,
@@ -212,5 +216,16 @@ impl Drop for Deploy {
     fn drop(&mut self) {
         let _ = umount(&self.sysroot);
         let _ = remove_dir(&self.sysroot);
+    }
+}
+
+#[cfg(test)]
+impl Deploy {
+    pub(crate) fn for_testing(deploy_dir: PathBuf) -> Self {
+        Deploy {
+            sysroot: deploy_dir.clone(),
+            deploy: deploy_dir,
+            repo: PathBuf::new(),
+        }
     }
 }
