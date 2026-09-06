@@ -39,6 +39,10 @@ pub struct TargetSysroot {
 }
 
 impl TargetSysroot {
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "flat ESP-geometry params by design, not grouped into a struct — see partition::DiskLayout"
+    )]
     pub fn new(
         deploy_device: &Path, deploy_fs: FsKind, esp_device: &Path, mount_point: PathBuf,
         extra_mounts: &[PartitionMount], esp_partition_number: Option<u32>, esp_starting_lba: Option<u64>,
@@ -186,6 +190,24 @@ impl TargetSysroot {
     }
 }
 
+impl Drop for TargetSysroot {
+    fn drop(&mut self) {
+        // SAFETY: `self` is being dropped and `repository` is never accessed again.
+        unsafe { ManuallyDrop::drop(&mut self.repository) };
+
+        let Some((base, nested)) = self.mounted.split_first() else {
+            return;
+        };
+
+        for mount_point in nested.iter().rev() {
+            let _ = umount(mount_point);
+            let _ = remove_dir(mount_point);
+        }
+
+        let _ = umount(base);
+    }
+}
+
 #[cfg(test)]
 impl TargetSysroot {
     pub(crate) fn for_testing(mount_point: PathBuf) -> Result<Self, SetupError> {
@@ -206,23 +228,5 @@ impl TargetSysroot {
             esp_ending_lba: None,
             esp_unique_partition_guid: None,
         })
-    }
-}
-
-impl Drop for TargetSysroot {
-    fn drop(&mut self) {
-        // SAFETY: `self` is being dropped and `repository` is never accessed again.
-        unsafe { ManuallyDrop::drop(&mut self.repository) };
-
-        let Some((base, nested)) = self.mounted.split_first() else {
-            return;
-        };
-
-        for mount_point in nested.iter().rev() {
-            let _ = umount(mount_point);
-            let _ = remove_dir(mount_point);
-        }
-
-        let _ = umount(base);
     }
 }
