@@ -6,7 +6,8 @@
 use std::mem::MaybeUninit;
 
 use upac_abi::boot::{
-    CBootPluginRequest, CBootSlotsRequest, ConfirmBootFn, EspLoaderSourceFn, ProbeFn, RegisterBootSlotsFn, SetOneShotFn,
+    CBootPluginRequest, CBootSlotsRequest, ConfirmBootFn, EspLoaderSourceFn, InstallFn, ProbeFn, RegisterBootSlotsFn,
+    SetOneShotFn,
 };
 use upac_abi::error::ErrorKind;
 use upac_abi::types::{CBorrowed, CSlice};
@@ -27,27 +28,27 @@ use crate::plugin::boot::manifest::load_boot_plugin_manifests;
 
 #[cfg(feature = "builtin-grub")]
 use upac_boot_grub::{
-    confirm_boot as grub_confirm_boot, esp_loader_source as grub_esp_loader_source, probe as grub_probe,
-    register_boot_slots as grub_register_boot_slots, set_one_shot as grub_set_one_shot,
+    confirm_boot as grub_confirm_boot, esp_loader_source as grub_esp_loader_source, install as grub_install,
+    probe as grub_probe, register_boot_slots as grub_register_boot_slots, set_one_shot as grub_set_one_shot,
 };
 
 #[cfg(feature = "builtin-systemd-boot")]
 use upac_boot_systemd_boot::{
     confirm_boot as systemd_boot_confirm_boot, esp_loader_source as systemd_boot_esp_loader_source,
-    probe as systemd_boot_probe, register_boot_slots as systemd_boot_register_boot_slots,
-    set_one_shot as systemd_boot_set_one_shot,
+    install as systemd_boot_install, probe as systemd_boot_probe,
+    register_boot_slots as systemd_boot_register_boot_slots, set_one_shot as systemd_boot_set_one_shot,
 };
 
 #[cfg(feature = "builtin-uki")]
 use upac_boot_uki::{
-    confirm_boot as uki_confirm_boot, esp_loader_source as uki_esp_loader_source, probe as uki_probe,
-    register_boot_slots as uki_register_boot_slots, set_one_shot as uki_set_one_shot,
+    confirm_boot as uki_confirm_boot, esp_loader_source as uki_esp_loader_source, install as uki_install,
+    probe as uki_probe, register_boot_slots as uki_register_boot_slots, set_one_shot as uki_set_one_shot,
 };
 
 #[cfg(feature = "builtin-refind")]
 use upac_boot_refind::{
-    confirm_boot as refind_confirm_boot, esp_loader_source as refind_esp_loader_source, probe as refind_probe,
-    register_boot_slots as refind_register_boot_slots, set_one_shot as refind_set_one_shot,
+    confirm_boot as refind_confirm_boot, esp_loader_source as refind_esp_loader_source, install as refind_install,
+    probe as refind_probe, register_boot_slots as refind_register_boot_slots, set_one_shot as refind_set_one_shot,
 };
 
 pub mod error;
@@ -59,7 +60,7 @@ pub mod manifest;
 impl BootPlugin {
     fn from_static(
         probe: ProbeFn, set_one_shot: SetOneShotFn, confirm_boot: ConfirmBootFn, esp_loader_source: EspLoaderSourceFn,
-        register_boot_slots: RegisterBootSlotsFn,
+        register_boot_slots: RegisterBootSlotsFn, install: InstallFn,
     ) -> Self {
         BootPlugin {
             probe,
@@ -67,6 +68,7 @@ impl BootPlugin {
             confirm_boot,
             esp_loader_source,
             register_boot_slots,
+            install,
 
             #[cfg(feature = "dynamic-plugins")]
             _library: None,
@@ -189,6 +191,7 @@ fn static_plugins() -> Vec<(&'static str, BootPlugin)> {
             uki_confirm_boot,
             uki_esp_loader_source,
             uki_register_boot_slots,
+            uki_install,
         ),
     ));
 
@@ -201,6 +204,7 @@ fn static_plugins() -> Vec<(&'static str, BootPlugin)> {
             systemd_boot_confirm_boot,
             systemd_boot_esp_loader_source,
             systemd_boot_register_boot_slots,
+            systemd_boot_install,
         ),
     ));
 
@@ -213,6 +217,7 @@ fn static_plugins() -> Vec<(&'static str, BootPlugin)> {
             grub_confirm_boot,
             grub_esp_loader_source,
             grub_register_boot_slots,
+            grub_install,
         ),
     ));
 
@@ -225,6 +230,7 @@ fn static_plugins() -> Vec<(&'static str, BootPlugin)> {
             refind_confirm_boot,
             refind_esp_loader_source,
             refind_register_boot_slots,
+            refind_install,
         ),
     ));
 
@@ -244,6 +250,7 @@ pub struct BootPlugin {
     confirm_boot: ConfirmBootFn,
     esp_loader_source: EspLoaderSourceFn,
     register_boot_slots: RegisterBootSlotsFn,
+    install: InstallFn,
 
     #[cfg(feature = "dynamic-plugins")]
     _library: Option<Library>,
@@ -260,6 +267,7 @@ impl BootPlugin {
         let confirm_boot: ConfirmBootFn = unsafe { load_symbol(&library, "confirm_boot")? };
         let esp_loader_source: EspLoaderSourceFn = unsafe { load_symbol(&library, "esp_loader_source")? };
         let register_boot_slots: RegisterBootSlotsFn = unsafe { load_symbol(&library, "register_boot_slots")? };
+        let install: InstallFn = unsafe { load_symbol(&library, "install")? };
 
         let got = unsafe { abi_version() };
         if got != BOOT_ABI_VERSION {
@@ -275,6 +283,7 @@ impl BootPlugin {
             confirm_boot,
             esp_loader_source,
             register_boot_slots,
+            install,
             _library: Some(library),
         })
     }
@@ -330,6 +339,18 @@ impl BootPlugin {
         let mut error = MaybeUninit::<ErrorKind>::uninit();
 
         let code = unsafe { (self.register_boot_slots)(&request, error.as_mut_ptr()) };
+        if code != 0 {
+            return Err(BootPluginError::Reported(unsafe { error.assume_init() }));
+        }
+
+        Ok(())
+    }
+
+    pub fn install(&self, esp_mount_point: &str) -> Result<(), BootPluginError> {
+        let request = CBootPluginRequest::new(CSlice::from_borrowed(esp_mount_point.as_bytes()));
+        let mut error = MaybeUninit::<ErrorKind>::uninit();
+
+        let code = unsafe { (self.install)(&request, error.as_mut_ptr()) };
         if code != 0 {
             return Err(BootPluginError::Reported(unsafe { error.assume_init() }));
         }
