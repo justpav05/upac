@@ -86,14 +86,15 @@ impl Booter for Uki {
 
 impl Uki {
     fn find_boot_id(&self, slot_filename: &str) -> Result<u16, UkiError> {
+        let slot_file_name = format!("{}.efi", slot_filename.to_lowercase());
+
         for (entry, _var) in self.manager.get_boot_entries()? {
             let entry = entry?;
-            let matches = entry.entry.file_path_list.as_ref().is_some_and(|list| {
-                list.file_path
-                    .path
-                    .to_lowercase()
-                    .ends_with(&slot_filename.to_lowercase())
-            });
+            let matches = entry
+                .entry
+                .file_path_list
+                .as_ref()
+                .is_some_and(|list| list.file_path.path.to_lowercase().ends_with(&slot_file_name));
 
             if matches {
                 return Ok(entry.id);
