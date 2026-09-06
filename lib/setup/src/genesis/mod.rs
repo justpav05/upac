@@ -13,28 +13,26 @@ use upac_abi::hook::{Message, MessageHook};
 
 use upac_macro::{FromStageIndex, StageKey};
 
-use self::database::CreateDatabaseStage;
 use self::deploy::WriteDeployRecordStage;
 use self::embed::EmbedDatabaseStage;
 use self::entry::StageBootStage;
-use self::files::InsertFileEntryStage;
-use self::meta::ReadMetaStage;
+use self::enumerate::EnumeratePackagesStage;
+use self::import::ImportPackageStage;
 use self::source::PrepareSourceStage;
-use self::trees::ImportTreesStage;
+use self::unpack::UnpackPackageStage;
 
 use crate::data::{SetupExistingData, SetupWholeDiskData};
 use crate::error::SetupError;
 use crate::target::TargetSysroot;
 use crate::types::GenesisInput;
 
-mod database;
 mod deploy;
 mod embed;
 mod entry;
-mod files;
-mod meta;
+mod enumerate;
+mod import;
 mod source;
-mod trees;
+mod unpack;
 
 macro_rules! ctx_get {
     ($context:expr, $ty:ty) => {
@@ -50,18 +48,35 @@ macro_rules! ctx_take {
 }
 pub(crate) use ctx_take;
 
+macro_rules! import_if_dir {
+    ($repository:expr, $tree:expr, $source:expr, $import_ctx:expr, $cancel:expr) => {
+        if $source.is_dir() {
+            upac::composefs::file::FileHandle::new(::std::path::PathBuf::new()).import_directory(
+                $repository,
+                $tree,
+                $source,
+                $import_ctx,
+                $cancel,
+                &mut |_| {},
+            )?
+        } else {
+            Vec::new()
+        }
+    };
+}
+pub(crate) use import_if_dir;
+
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromStageIndex, StageKey)]
 pub enum GenesisStage {
     PrepareSource = 0,
-    ReadMeta = 1,
-    ImportTrees = 2,
-    CreateDatabase = 3,
-    InsertFileEntry = 4,
-    EmbedDatabase = 5,
-    WriteDeployRecord = 6,
-    StageBoot = 7,
-    Setup = 8,
+    EnumeratePackages = 1,
+    UnpackPackage = 2,
+    ImportPackage = 3,
+    EmbedDatabase = 4,
+    WriteDeployRecord = 5,
+    StageBoot = 6,
+    Setup = 7,
 }
 
 impl SetupExistingData<'_> {
@@ -72,6 +87,10 @@ impl SetupExistingData<'_> {
             Path::new(self.esp_device),
             PathBuf::from(self.mount_point()),
             &self.extra_mounts,
+            None,
+            None,
+            None,
+            None,
         )
         .map_err(|error| (GenesisStage::Setup, error))?;
 
@@ -82,10 +101,9 @@ impl SetupExistingData<'_> {
 
         let orchestrator = SequentialOrchestrator::new(vec![
             Box::new(PrepareSourceStage),
-            Box::new(ReadMetaStage),
-            Box::new(ImportTreesStage),
-            Box::new(CreateDatabaseStage),
-            Box::new(InsertFileEntryStage),
+            Box::new(EnumeratePackagesStage),
+            Box::new(UnpackPackageStage),
+            Box::new(ImportPackageStage),
             Box::new(EmbedDatabaseStage),
             Box::new(WriteDeployRecordStage),
             Box::new(StageBootStage),
@@ -119,10 +137,9 @@ impl SetupWholeDiskData<'_> {
 
         let orchestrator = SequentialOrchestrator::new(vec![
             Box::new(PrepareSourceStage),
-            Box::new(ReadMetaStage),
-            Box::new(ImportTreesStage),
-            Box::new(CreateDatabaseStage),
-            Box::new(InsertFileEntryStage),
+            Box::new(EnumeratePackagesStage),
+            Box::new(UnpackPackageStage),
+            Box::new(ImportPackageStage),
             Box::new(EmbedDatabaseStage),
             Box::new(WriteDeployRecordStage),
             Box::new(StageBootStage),

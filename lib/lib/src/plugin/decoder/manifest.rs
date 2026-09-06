@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 use std::fs;
+use std::io::ErrorKind;
 use std::str::FromStr;
 
 use mime::Mime;
@@ -26,7 +27,13 @@ pub fn load_decoder_manifests(
 ) -> Result<HashMap<String, DecoderManifest>, DecoderError> {
     let mut manifests = HashMap::new();
 
-    for entry in fs::read_dir(decoders_dir)? {
+    let dir = match fs::read_dir(decoders_dir) {
+        Ok(dir) => dir,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(manifests),
+        Err(error) => return Err(error.into()),
+    };
+
+    for entry in dir {
         let path = entry?.path();
 
         if path.extension().and_then(|extension| extension.to_str()) != Some(manifest_extension) {

@@ -14,6 +14,7 @@ pub enum UkiError {
     EfiUnavailable,
     PermissionDenied,
     EntryNotFound,
+    NoFreeBootId,
     InvalidRequest,
     Unexpected,
 }
@@ -39,6 +40,7 @@ impl From<UkiError> for ErrorKind {
             UkiError::EfiUnavailable => ErrorKind::NotInitialized,
             UkiError::PermissionDenied => ErrorKind::PermissionDenied,
             UkiError::EntryNotFound => ErrorKind::NotFound,
+            UkiError::NoFreeBootId => ErrorKind::OutOfMemory,
             UkiError::InvalidRequest => ErrorKind::InvalidEntry,
             UkiError::Unexpected => ErrorKind::Unexpected,
         }

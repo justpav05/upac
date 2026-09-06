@@ -30,12 +30,36 @@ loader_info_var = "LoaderInfo"
 loader_entry_one_shot_var = "LoaderEntryOneShot"
 loader_entry_default_var = "LoaderEntryDefault"
 
+# efi_linux_dir is the fixed UEFI-style (backslash) directory composefs-boot's own
+# `write_t2_simple` always writes UKI images under (`EFI/Linux/`, hardcoded upstream, not
+# configurable) — used to build the file-path device-path segment when genesis registers a
+# UEFI Boot#### entry for a UKI slot, so the entry's path always matches where the image
+# actually lands.
+[uki]
+efi_linux_dir = "\\EFI\\Linux\\"
+
+# source is the fixed, package-convention path (source-tree-relative) where systemd's own
+# packaging always installs its EFI binary — used by genesis to copy the loader onto a brand-new
+# ESP that doesn't have one yet (install/update never need this, the binary is already on the ESP
+# from genesis).
+[systemd_boot]
+source = "usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+
 # grub has no EFI-variable-based one-shot mechanism — it's file-based (grubenv), driven through
 # grub's own grub-reboot/grub-set-default tools rather than a hand-rolled binary-format writer.
 # Both the grubenv location and the tool names differ across distro packaging: Debian/Ubuntu/Arch
 # ship grub-reboot/grub-set-default writing /boot/grub/grubenv, while Fedora/RHEL keep the
 # "grub-*" names reserved for legacy GRUB Legacy and ship grub2-reboot/grub2-set-default writing
 # /boot/grub2/grubenv instead. *_primary/*_fallback are tried in that order.
+#
+# install_bin_primary/install_bin_fallback: same Debian/Arch-vs-Fedora naming split as the
+# reboot/set-default tools above, for the one-time `grub-install` genesis runs against a freshly
+# partitioned ESP. install_target is grub's own `--target` platform name (this project is
+# UEFI/x86_64-only throughout, matching systemd_boot/refind's own *_x64 binary names below).
+# install_bootloader_id is grub's `--bootloader-id`, used only to name the install's own
+# NVRAM-independent EFI/BOOT/BOOTX64.EFI fallback copy (see backend.rs's `--removable --no-nvram`
+# — genesis relies on the same firmware fallback path uki/systemd-boot/refind already use via
+# esp_loader_source, not a Boot#### entry, so a fresh disk boots without any NVRAM setup).
 [grub]
 grubenv_primary = "/boot/grub/grubenv"
 grubenv_fallback = "/boot/grub2/grubenv"
@@ -43,6 +67,10 @@ reboot_bin_primary = "grub-reboot"
 reboot_bin_fallback = "grub2-reboot"
 set_default_bin_primary = "grub-set-default"
 set_default_bin_fallback = "grub2-set-default"
+install_bin_primary = "grub-install"
+install_bin_fallback = "grub2-install"
+install_target = "x86_64-efi"
+install_bootloader_id = "upac"
 
 # rEFInd has no separate one-shot/persistent pair of variables like systemd-boot's
 # LoaderEntryOneShot/LoaderEntryDefault — it has exactly one, PreviousBoot, which it writes itself
@@ -50,6 +78,9 @@ set_default_bin_fallback = "grub2-set-default"
 # entry through PreviousBoot only takes effect if refind.conf's `default_selection` starts with
 # `+` ("remember last boot"); that's a user/deployment-side rEFInd config choice this plugin has
 # no way to inspect or control. GUID/name per rEFInd's own documented EFI variable, not guessed.
+# source is the fixed, package-convention path (source-tree-relative) where rEFInd's own packaging
+# always installs its EFI binary — same genesis use as systemd_boot.source above.
 [refind]
 previous_boot_var = "PreviousBoot"
 previous_boot_guid = "36d08fa7-cf0b-42f5-8f14-68df73ed3740"
+source = "usr/share/refind/refind_x64.efi"

@@ -14,7 +14,7 @@ use std::str::from_utf8;
 use libloading::Library;
 
 #[cfg(feature = "dynamic-plugins")]
-use upac_abi::ABI_VERSION;
+use upac_abi::DECODER_ABI_VERSION;
 
 #[cfg(feature = "dynamic-plugins")]
 use upac_abi::decoder::AbiVersionFn;
@@ -97,10 +97,10 @@ impl Decoder {
         let decode: DecodeFn = unsafe { load_symbol(&library, "decode")? };
 
         let got = unsafe { abi_version() };
-        if got != ABI_VERSION {
+        if got != DECODER_ABI_VERSION {
             return Err(DecoderError::AbiMismatch {
                 got,
-                expected: ABI_VERSION,
+                expected: DECODER_ABI_VERSION,
             });
         }
 
@@ -160,7 +160,7 @@ impl Decoder {
 /// extensions — mirrors `plugin::boot::static_plugins`, adapted for extension-based dispatch
 /// (a decoder is selected by the package file's extension, not by a `probe()` call). No ABI
 /// version check: compiled from the same source tree by the same compiler, so the decoder's own
-/// `ABI_VERSION` matches by construction.
+/// `DECODER_ABI_VERSION` matches by construction.
 #[cfg(feature = "builtin-decoders")]
 #[allow(
     clippy::vec_init_then_push,

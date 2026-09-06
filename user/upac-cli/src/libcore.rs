@@ -10,6 +10,7 @@ use i18n_embed_fl::fl;
 
 use nix::unistd::Uid;
 
+use upac_abi::LIB_ABI_VERSION;
 use upac_abi::error::CError;
 use upac_abi::hook::CancelToken;
 use upac_abi::request::{
@@ -170,10 +171,10 @@ impl Lib {
         };
 
         let abi_version = unsafe { (lib.version_abi)() };
-        if abi_version != upac_abi::ABI_VERSION {
+        if abi_version != LIB_ABI_VERSION {
             let err = AbiMismatch {
                 got: abi_version,
-                expected: upac_abi::ABI_VERSION,
+                expected: LIB_ABI_VERSION,
             };
 
             return Err(err.into());

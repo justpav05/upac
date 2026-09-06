@@ -389,7 +389,6 @@ fn valid_setup_base() -> CSetupBase {
         base: valid_request_base(),
         mount_point: CSlice { ptr: null(), len: 0 },
         source: CSlice::from_owned(b"/mnt/source".to_vec()),
-        meta_filename: CSlice { ptr: null(), len: 0 },
         empty_config: false,
         pinned: false,
         boot_plugin: CSlice { ptr: null(), len: 0 },

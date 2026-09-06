@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: LGPL-3.0-or-later WITH LGPL-3.0-linking-exception
 
-use upac_abi::ABI_VERSION;
+use upac_abi::LIB_ABI_VERSION;
 use upac_abi::error::{CError, CommandState, ErrorKind};
 use upac_abi::hook::CancelToken;
 use upac_abi::response::CUnmutatedResponse;
@@ -15,7 +15,7 @@ pub mod unmutated;
 /// Touches no pointers — `unsafe extern "C"` only to match the ABI calling convention.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn version_abi() -> u32 {
-    ABI_VERSION
+    LIB_ABI_VERSION
 }
 
 /// # Safety

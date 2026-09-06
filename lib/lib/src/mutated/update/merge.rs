@@ -13,7 +13,7 @@ use upac_abi::hook::{CancelToken, ProgressEventBuilder};
 use crate::composefs::file::FileHandle;
 use crate::composefs::overlay::{apply_overlay_upper, apply_tree_overlay};
 use crate::composefs::repository::commit_tree;
-use crate::config::merge::merge_config;
+use crate::config::merge_config;
 use crate::database::error::DeployRecordError;
 use crate::database::record::DeployRecord;
 use crate::deploy::Deploy;

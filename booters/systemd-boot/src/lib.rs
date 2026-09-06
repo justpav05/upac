@@ -6,9 +6,9 @@
 use std::str::from_utf8;
 
 use upac_abi::BOOT_ABI_VERSION;
-use upac_abi::boot::{Booter, CBootPluginRequest};
+use upac_abi::boot::{Booter, CBootPluginRequest, CBootSlotsRequest};
 use upac_abi::error::ErrorKind;
-use upac_abi::types::CBorrowed;
+use upac_abi::types::{CBorrowed, CSlice};
 
 use crate::backend::Bls;
 use crate::error::BlsError;
@@ -30,6 +30,13 @@ pub unsafe extern "C" fn abi_version() -> u32 {
 #[cfg_attr(feature = "cdylib", unsafe(no_mangle))]
 pub unsafe extern "C" fn probe() -> i32 {
     i32::from(Bls::probes())
+}
+
+/// # Safety
+/// Touches no pointers — `unsafe extern "C"` only to match `upac_abi::boot::EspLoaderSourceFn`.
+#[cfg_attr(feature = "cdylib", unsafe(no_mangle))]
+pub unsafe extern "C" fn esp_loader_source() -> CSlice {
+    CSlice::from_slice(Bls::esp_loader_source().map(str::as_bytes))
 }
 
 /// # Safety
@@ -76,8 +83,23 @@ pub unsafe extern "C" fn confirm_boot(request: *const CBootPluginRequest, err_ou
     }
 }
 
+/// # Safety
+/// Touches no pointers — systemd-boot has no Boot#### entries to register, always succeeds.
+#[cfg_attr(feature = "cdylib", unsafe(no_mangle))]
+pub unsafe extern "C" fn register_boot_slots(_request: *const CBootSlotsRequest, _err_out: *mut ErrorKind) -> i32 {
+    0
+}
+
+/// # Safety
+/// Touches no pointers — systemd-boot has nothing to install onto a pre-existing ESP, always
+/// succeeds (its binary is copied from the source package tree via `esp_loader_source` instead).
+#[cfg_attr(feature = "cdylib", unsafe(no_mangle))]
+pub unsafe extern "C" fn install(_request: *const CBootPluginRequest, _err_out: *mut ErrorKind) -> i32 {
+    0
+}
+
 fn entry_name_from_request(request: &CBootPluginRequest) -> Result<String, BlsError> {
-    let bytes = unsafe { request.entry_name.as_borrowed() };
+    let bytes = unsafe { request.value.as_borrowed() };
 
     from_utf8(bytes)
         .map(str::to_owned)

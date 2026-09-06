@@ -10,69 +10,37 @@ Near-term, concrete items. See `ROADMAP.md` for the bigger picture.
 
 ## upac-lib
 
-Test-coverage pass in progress, going file by file through the non-command core first
-(`errors.rs`/`lock.rs`/`search.rs`/`fs.rs`/`orchestrator/*`/`database/*` done), commands
-(`mutated`/`unmutated`) last. Remaining core files not yet visited: `deploy/{error,retention,mod}.rs`
-(`esp.rs` skipped — real mount), `scripts/{error,file,load,pipeline,primitive}.rs`,
-`plugin/decoder/{error,unpack,mod}.rs`, `plugin/boot/{error,manifest,mod}.rs`,
-`composefs/{diff,error,mod}.rs`, `config/mod.rs`, `boot/{error,mod}.rs`.
+Test-coverage pass in progress. The entire non-command core is covered (`errors.rs`/`lock.rs`/
+`search.rs`/`fs.rs`/`orchestrator/*`/`database/*`/`deploy/*`/`scripts/*`/`composefs/*`/`config/*`/
+`boot/*`/`plugin/decoder/{error,manifest,triggers}.rs`/`plugin/boot/{error,manifest}.rs`), except
+`plugin/decoder/unpack.rs`/`plugin/decoder/mod.rs`/`plugin/boot/mod.rs` (need a real dlopen'd/
+`builtin-*` plugin) and `deploy/esp.rs` (real mount table) — both explicit, justified skips. Every
+`mutated`/`unmutated` command's own `<Command>Error` enum is also now covered (inline tests next to
+each `error.rs`, since `mutated`/`unmutated` aren't `pub`) — only each variant's own logic, not the
+macro-generated `Common(...)` delegation shared with `errors.rs`'s already-tested `CommonError`.
+Remaining: the `Stage::run()` bodies themselves — each needs a real composefs `Repository`/`Deploy`/
+database in context, likely out of scope for unit tests unless a pure-logic helper turns out to be
+extractable.
 
-`boot/mod.rs`'s UKI staging only ever writes the single fixed `upac-to` slot
-(`layout::boot::UPAC_TO_SLOT`) — doc chapter 3's disk-layout map still describes a two-slot
-`upac-from.efi`/`upac-to.efi` A/B scheme, but no code anywhere writes/reads an `upac-from` slot.
-Real unfinished A/B swap, not just a stale doc — needs a decision (implement the second slot, or
-formally drop it and fix the doc to match the single-slot design `lib.toml`'s own comment already
-argues for).
+**Two standalone boot-time services still need to be built** — neither is upac-lib/upac-cli code,
+both run on the installed system itself, outside anything `up`/`up-sp` invokes:
 
-Genesis (`up-sp`) now installs the actual bootloader binary onto a fresh ESP for systemd-boot and
-rEFInd (`StageBootStage::run`, `lib/setup/lib.toml`'s `[genesis]` source paths) — confirmed working
-via a live VM test for systemd-boot; rEFInd wired the same way but not yet VM-verified. grub is NOT
-handled — a real `grub-install`-equivalent (target-specific generated `grubx64.efi`, not a plain
-file copy) is out of scope for now; either shell out to `grub-install` against the mounted ESP, or
-explicitly document grub as unsupported for genesis whole-disk mode.
+- **composefs-mount boot hook**: nothing yet resolves `composefs.digest=<hash>` (the kernel cmdline
+  param `write_boot_entry` already writes) against the on-disk repository, mounts the erofs image
+  with fs-verity, and overlays `state/deploy/<digest>/etc/` — without this, a genesis-produced disk's
+  firmware boots the kernel, but the initramfs has no way to actually assemble the root. The upstream
+  tool for this already exists (`composefs-setup-root`, crates.io, same `composefs-rs` project as
+  our `composefs`/`composefs-boot` deps) — what's missing is the systemd-unit integration (ordered
+  between `sysroot.mount` and `initrd-switch-root.target`, same role as ostree's
+  `ostree-prepare-root.service`; the live VM's initramfs is systemd-based, not classic mkinitcpio
+  hooks). Also unresolved: whether upac ships/packages this integration itself or expects it to
+  already exist on the source distro.
+- **UKI A/B confirm-boot service**: after a successful boot, something needs to confirm once, swap
+  `to`↔`from`, and set the normal persistent boot order. Nothing calls `Booter::confirm_boot`
+  anywhere yet.
 
-`StageBootStage` picks which ESP loader binary to copy via a `match input.boot_plugin.as_deref()`
-against literal `"systemd-boot"`/`"refind"` strings — this bypasses the actual dynamic boot-plugin
-system (`resolve_boot_plugin`/`BootPluginManifest`/`static_plugins`), which is supposed to be the
-one place plugin names are known. Adding a 5th booter plugin would require editing this match by
-hand instead of just dropping in a new plugin. The correct fix is extending the `Booter` ABI itself
-with a 4th function (e.g. `esp_loader_source() -> CSlice`, empty for uki/grub) so genesis asks the
-already-resolved plugin for its own install-time source path instead of hardcoding names — but that
-means bumping `BOOT_ABI_VERSION` and touching all 4 `booters/*` crates, so deliberately deferred;
-the hardcoded match stays as a known, scoped limitation until then.
-
-**Genesis-produced disks don't actually boot into the installed system yet** — found via a live
-QEMU/OVMF test (systemd-boot now starts, finds the BLS entry, loads kernel+initramfs — that part
-works after the bootloader-binary fix above). Two separate gaps, both required:
-1. `partition.rs`'s `LINUX_PARTITION_TYPE_GUID` (`0fc63daf-8483-4772-8e79-3d69d8477de4`, generic
-   "Linux filesystem data") should be the discoverable-root GUID
-   (`4f68bce3-e8cd-4db1-96e7-fbcaf984b709`, "Linux root x86-64") so `systemd-gpt-auto-generator`
-   can find the deploy partition at all instead of hanging on `/dev/gpt-auto-root`.
-2. Even with (1) fixed, a plain partition mount isn't how composefs systems boot — nothing in this
-   project resolves `composefs.digest=<hash>` (the kernel cmdline param `write_boot_entry` already
-   writes) against the on-disk repository, mounts the erofs image with fs-verity, and overlays
-   `state/deploy/<digest>/etc/`. **Found a real, existing upstream tool for exactly this**:
-   `composefs-setup-root` (crates.io, same `composefs-rs` project/version as our `composefs`/
-   `composefs-boot` deps) — a Rust binary, not something we'd write ourselves. Our on-disk layout
-   already matches its hardcoded expectations (`composefs/`, `state/deploy/<digest>/`) after
-   renaming `etc-upper` → `etc` (done, `lib.toml`'s `config_dir_name`). What's still missing: the
-   actual boot-time integration — the live VM's initramfs is systemd-based (mkinitcpio's `systemd`
-   hook, not classic busybox-style hooks), so this needs a systemd unit ordered between
-   `sysroot.mount` and `initrd-switch-root.target` (same role as ostree's
-   `ostree-prepare-root.service`), not a classic mkinitcpio hook script. Also unresolved: whether
-   upac needs to ship/package this integration itself, or whether it's expected to already exist
-   on the source distro (same assumption as the systemd-boot/rEFInd binary copy above) — needs
-   checking whether Arch/AUR already has a package for this.
-
-**Genesis tracks the entire bootstrapped system as a single synthetic "rootfs" package**, not
-per-package (`ReadMetaStage` reads one `meta.toml`, `ImportTreesStage` imports all of source's
-`usr`/`etc` wholesale). Found while reasoning about the `composefs-setup-root` hook: if it needs to
-already be installed on the source system (via pacman) for genesis to pick it up, its files still
-end up attributed to the one fake "rootfs" package in our database — no real per-package
-provenance for anything baked into the source image, unlike a `pacstrap`-then-`up install` flow
-would give. Decision made: genesis should eventually be rewritten to install real, individually
-decoded packages through the same pipeline `up install` uses, instead of importing a pre-built
-directory wholesale — no special-casing even for the kernel package. This is a genesis rewrite, not
-a patch; deliberately deferred until after a dedicated code-cleanup/macro-consolidation pass
-(reduce duplicated lines, extract shared macros) elsewhere in the codebase first.
-
+**`lib/lib/src/plugin/` needs a readability pass**: grown too dense to follow, `plugin/boot/mod.rs`
+in particular (360 lines — static-link wiring for all 4 plugins, dynamic dlopen loading, and the
+`BootPlugin` public API all crammed into one file). Split by concern (mirror the existing
+folder-per-logical-unit convention used elsewhere in this crate) and simplify — right now it takes
+real effort to follow what calls what.

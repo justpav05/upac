@@ -30,7 +30,7 @@ use crate::layout::decoders;
 #[cfg(feature = "dynamic-plugins")]
 use crate::plugin::decoder::manifest::{DecoderManifest, load_decoder_manifests};
 
-#[cfg(all(not(feature = "dynamic-plugins"), feature = "builtin-decoders"))]
+#[cfg(feature = "builtin-decoders")]
 use crate::plugin::decoder::static_decoders;
 
 pub struct PackageUnpacker {
@@ -42,11 +42,14 @@ pub struct PackageUnpacker {
 
     #[cfg(all(not(feature = "dynamic-plugins"), feature = "builtin-decoders"))]
     decoders: Vec<(&'static str, &'static [&'static str], Decoder)>,
+
+    #[cfg(all(feature = "dynamic-plugins", feature = "builtin-decoders"))]
+    static_decoders: Vec<(&'static str, &'static [&'static str], Decoder)>,
 }
 
 #[cfg(any(feature = "dynamic-plugins", feature = "builtin-decoders"))]
 impl PackageUnpacker {
-    pub(crate) fn unpack_one(
+    pub fn unpack_one(
         &mut self, package_path: &str, index: usize, tmp_path: &str, cancel: &CancelToken,
     ) -> Result<(PackageTemp, DeclarativeTrigger), DecoderError> {
         let format = self.format_for(package_path)?;
@@ -86,6 +89,9 @@ impl PackageUnpacker {
         Ok(Self {
             manifests,
             decoders: HashMap::new(),
+
+            #[cfg(feature = "builtin-decoders")]
+            static_decoders: static_decoders(),
         })
     }
 
@@ -95,24 +101,44 @@ impl PackageUnpacker {
             .and_then(|extension| extension.to_str())
             .ok_or_else(|| DecoderError::UnknownFormat(package_path.to_owned()))?;
 
-        self.manifests
+        if let Some(format) = self
+            .manifests
             .values()
             .find(|manifest| manifest.extensions.iter().any(|candidate| candidate == extension))
             .map(|manifest| manifest.format.clone())
-            .ok_or_else(|| DecoderError::UnknownFormat(package_path.to_owned()))
+        {
+            return Ok(format);
+        }
+
+        #[cfg(feature = "builtin-decoders")]
+        if let Some((format, ..)) = self
+            .static_decoders
+            .iter()
+            .find(|(_, extensions, _)| extensions.contains(&extension))
+        {
+            return Ok((*format).to_owned());
+        }
+
+        Err(DecoderError::UnknownFormat(package_path.to_owned()))
     }
 
     fn decoder_for(&mut self, format: &str) -> Result<&Decoder, DecoderError> {
-        if !self.decoders.contains_key(format) {
-            let manifest = self
-                .manifests
-                .get(format)
-                .ok_or_else(|| DecoderError::UnknownFormat(format.to_owned()))?;
-            let decoder = Decoder::load(&manifest.library)?;
-            self.decoders.insert(format.to_owned(), decoder);
+        if self.decoders.contains_key(format) {
+            return Ok(&self.decoders[format]);
         }
 
-        Ok(&self.decoders[format])
+        if let Some(manifest) = self.manifests.get(format) {
+            let decoder = Decoder::load(&manifest.library)?;
+            self.decoders.insert(format.to_owned(), decoder);
+            return Ok(&self.decoders[format]);
+        }
+
+        #[cfg(feature = "builtin-decoders")]
+        if let Some((_, _, decoder)) = self.static_decoders.iter().find(|(name, _, _)| *name == format) {
+            return Ok(decoder);
+        }
+
+        Err(DecoderError::UnknownFormat(format.to_owned()))
     }
 }
 
@@ -157,7 +183,7 @@ impl PackageUnpacker {
         Err(DecoderError::NoDecoders)
     }
 
-    pub(crate) fn unpack_one(
+    pub fn unpack_one(
         &mut self, _package_path: &str, _index: usize, _tmp_path: &str, _cancel: &CancelToken,
     ) -> Result<(PackageTemp, DeclarativeTrigger), DecoderError> {
         Err(DecoderError::NoDecoders)

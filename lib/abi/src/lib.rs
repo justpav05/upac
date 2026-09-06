@@ -16,8 +16,9 @@ pub mod response;
 pub mod setup;
 pub mod types;
 
-pub const ABI_VERSION: u32 = 2;
-pub const BOOT_ABI_VERSION: u32 = 1;
+pub const LIB_ABI_VERSION: u32 = 2;
+pub const BOOT_ABI_VERSION: u32 = 2;
+pub const DECODER_ABI_VERSION: u32 = 2;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

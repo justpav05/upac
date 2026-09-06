@@ -5,7 +5,10 @@
 
 use std::mem::MaybeUninit;
 
-use upac_abi::boot::{CBootPluginRequest, ConfirmBootFn, ProbeFn, SetOneShotFn};
+use upac_abi::boot::{
+    CBootPluginRequest, CBootSlotsRequest, ConfirmBootFn, EspLoaderSourceFn, InstallFn, ProbeFn, RegisterBootSlotsFn,
+    SetOneShotFn,
+};
 use upac_abi::error::ErrorKind;
 use upac_abi::types::{CBorrowed, CSlice};
 
@@ -15,54 +18,25 @@ use crate::plugin::boot::error::BootPluginError;
 use libloading::Library;
 
 #[cfg(feature = "dynamic-plugins")]
-use upac_abi::BOOT_ABI_VERSION;
-
-#[cfg(feature = "dynamic-plugins")]
-use upac_abi::boot::AbiVersionFn;
-
-#[cfg(feature = "dynamic-plugins")]
 use crate::plugin::boot::manifest::load_boot_plugin_manifests;
-
-#[cfg(feature = "builtin-grub")]
-use upac_boot_grub::{confirm_boot as grub_confirm_boot, probe as grub_probe, set_one_shot as grub_set_one_shot};
-
-#[cfg(feature = "builtin-systemd-boot")]
-use upac_boot_systemd_boot::{
-    confirm_boot as systemd_boot_confirm_boot, probe as systemd_boot_probe, set_one_shot as systemd_boot_set_one_shot,
-};
-
-#[cfg(feature = "builtin-uki")]
-use upac_boot_uki::{confirm_boot as uki_confirm_boot, probe as uki_probe, set_one_shot as uki_set_one_shot};
-
-#[cfg(feature = "builtin-refind")]
-use upac_boot_refind::{
-    confirm_boot as refind_confirm_boot, probe as refind_probe, set_one_shot as refind_set_one_shot,
-};
 
 pub mod error;
 
 #[cfg(feature = "dynamic-plugins")]
 pub mod manifest;
 
-#[cfg(feature = "builtin-booters")]
-impl BootPlugin {
-    fn from_static(probe: ProbeFn, set_one_shot: SetOneShotFn, confirm_boot: ConfirmBootFn) -> Self {
-        BootPlugin {
-            probe,
-            set_one_shot,
-            confirm_boot,
+#[cfg(feature = "dynamic-plugins")]
+mod dynamic_link;
 
-            #[cfg(feature = "dynamic-plugins")]
-            _library: None,
-        }
-    }
-}
+#[cfg(feature = "builtin-booters")]
+mod static_link;
 
 /// Resolves a boot plugin by loading shared objects described by on-disk manifests.
 ///
 /// Built with `dynamic-plugins`: plugins are discovered at runtime from
 /// `boot_plugins_dir`. Any plugin compiled in via `builtin-*` is still reachable
-/// through [`static_plugins`], but on-disk manifests take part in the same search.
+/// through [`static_link::static_plugins`], but on-disk manifests take part in the
+/// same search.
 #[cfg(feature = "dynamic-plugins")]
 pub fn resolve_boot_plugin(
     boot_plugins_dir: &str, manifest_extension: &str, requested: Option<&str>,
@@ -76,7 +50,7 @@ pub fn resolve_boot_plugin(
             }
 
             #[cfg(feature = "builtin-booters")]
-            if let Some((_, plugin)) = static_plugins()
+            if let Some((_, plugin)) = static_link::static_plugins()
                 .into_iter()
                 .find(|(plugin_name, _)| *plugin_name == name)
             {
@@ -95,7 +69,7 @@ pub fn resolve_boot_plugin(
             }
 
             #[cfg(feature = "builtin-booters")]
-            for (_, plugin) in static_plugins() {
+            for (_, plugin) in static_link::static_plugins() {
                 if plugin.probes() {
                     claimants.push(plugin);
                 }
@@ -131,7 +105,7 @@ pub fn resolve_boot_plugin(
 
     #[cfg(feature = "builtin-booters")]
     {
-        let plugins = static_plugins();
+        let plugins = static_link::static_plugins();
 
         match requested {
             Some(name) => plugins
@@ -152,86 +126,16 @@ pub fn resolve_boot_plugin(
     }
 }
 
-/// The boot plugins linked into this build, in probe order.
-///
-/// No ABI version check is performed here: these are compiled from the same source
-/// tree by the same compiler, so [`BOOT_ABI_VERSION`] matches by construction.
-#[cfg(feature = "builtin-booters")]
-#[allow(
-    clippy::vec_init_then_push,
-    reason = "each push is independently cfg-gated, vec![] can't express that"
-)]
-fn static_plugins() -> Vec<(&'static str, BootPlugin)> {
-    let mut plugins = Vec::new();
-
-    #[cfg(feature = "builtin-uki")]
-    plugins.push((
-        "uki",
-        BootPlugin::from_static(uki_probe, uki_set_one_shot, uki_confirm_boot),
-    ));
-
-    #[cfg(feature = "builtin-systemd-boot")]
-    plugins.push((
-        "systemd-boot",
-        BootPlugin::from_static(systemd_boot_probe, systemd_boot_set_one_shot, systemd_boot_confirm_boot),
-    ));
-
-    #[cfg(feature = "builtin-grub")]
-    plugins.push((
-        "grub",
-        BootPlugin::from_static(grub_probe, grub_set_one_shot, grub_confirm_boot),
-    ));
-
-    #[cfg(feature = "builtin-refind")]
-    plugins.push((
-        "refind",
-        BootPlugin::from_static(refind_probe, refind_set_one_shot, refind_confirm_boot),
-    ));
-
-    plugins
-}
-
-#[cfg(feature = "dynamic-plugins")]
-unsafe fn load_symbol<T: Copy>(library: &Library, name: &str) -> Result<T, BootPluginError> {
-    unsafe { library.get::<T>(name.as_bytes()) }
-        .map(|symbol| *symbol)
-        .map_err(|_| BootPluginError::Symbol)
-}
-
 pub struct BootPlugin {
     probe: ProbeFn,
     set_one_shot: SetOneShotFn,
     confirm_boot: ConfirmBootFn,
+    esp_loader_source: EspLoaderSourceFn,
+    register_boot_slots: RegisterBootSlotsFn,
+    install: InstallFn,
 
     #[cfg(feature = "dynamic-plugins")]
     _library: Option<Library>,
-}
-
-#[cfg(feature = "dynamic-plugins")]
-impl BootPlugin {
-    pub fn load(library_name: &str) -> Result<Self, BootPluginError> {
-        let library = unsafe { Library::new(library_name) }.map_err(|_| BootPluginError::Load)?;
-
-        let abi_version: AbiVersionFn = unsafe { load_symbol(&library, "abi_version")? };
-        let probe: ProbeFn = unsafe { load_symbol(&library, "probe")? };
-        let set_one_shot: SetOneShotFn = unsafe { load_symbol(&library, "set_one_shot")? };
-        let confirm_boot: ConfirmBootFn = unsafe { load_symbol(&library, "confirm_boot")? };
-
-        let got = unsafe { abi_version() };
-        if got != BOOT_ABI_VERSION {
-            return Err(BootPluginError::AbiMismatch {
-                got,
-                expected: BOOT_ABI_VERSION,
-            });
-        }
-
-        Ok(BootPlugin {
-            probe,
-            set_one_shot,
-            confirm_boot,
-            _library: Some(library),
-        })
-    }
 }
 
 impl BootPlugin {
@@ -256,6 +160,46 @@ impl BootPlugin {
         let mut error = MaybeUninit::<ErrorKind>::uninit();
 
         let code = unsafe { (self.confirm_boot)(&request, error.as_mut_ptr()) };
+        if code != 0 {
+            return Err(BootPluginError::Reported(unsafe { error.assume_init() }));
+        }
+
+        Ok(())
+    }
+
+    pub fn esp_loader_source(&self) -> Option<String> {
+        let slice = unsafe { (self.esp_loader_source)() };
+
+        Option::<&str>::try_from(&slice).ok().flatten().map(str::to_owned)
+    }
+
+    pub fn register_boot_slots(
+        &self, esp_partition_number: u32, esp_starting_lba: u64, esp_ending_lba: u64,
+        esp_unique_partition_guid: [u8; 16], to_slot: &str, from_slot: &str,
+    ) -> Result<(), BootPluginError> {
+        let request = CBootSlotsRequest::new(
+            esp_partition_number,
+            esp_starting_lba,
+            esp_ending_lba,
+            esp_unique_partition_guid,
+            CSlice::from_borrowed(to_slot.as_bytes()),
+            CSlice::from_borrowed(from_slot.as_bytes()),
+        );
+        let mut error = MaybeUninit::<ErrorKind>::uninit();
+
+        let code = unsafe { (self.register_boot_slots)(&request, error.as_mut_ptr()) };
+        if code != 0 {
+            return Err(BootPluginError::Reported(unsafe { error.assume_init() }));
+        }
+
+        Ok(())
+    }
+
+    pub fn install(&self, esp_mount_point: &str) -> Result<(), BootPluginError> {
+        let request = CBootPluginRequest::new(CSlice::from_borrowed(esp_mount_point.as_bytes()));
+        let mut error = MaybeUninit::<ErrorKind>::uninit();
+
+        let code = unsafe { (self.install)(&request, error.as_mut_ptr()) };
         if code != 0 {
             return Err(BootPluginError::Reported(unsafe { error.assume_init() }));
         }

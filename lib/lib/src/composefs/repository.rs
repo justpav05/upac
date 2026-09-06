@@ -23,6 +23,14 @@ pub fn init(path: &Path) -> Result<(Repository<ObjectID>, bool), RepoError> {
     Ok(Repository::init_path(AT_FDCWD, path, RepositoryConfig::default())?)
 }
 
+pub fn init_insecure(path: &Path) -> Result<(Repository<ObjectID>, bool), RepoError> {
+    Ok(Repository::init_path(
+        AT_FDCWD,
+        path,
+        RepositoryConfig::default().set_insecure(),
+    )?)
+}
+
 pub(crate) fn open(path: &Path) -> Result<Repository<ObjectID>, RepoError> {
     Ok(Repository::open_path(AT_FDCWD, path)?)
 }
