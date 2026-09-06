@@ -35,18 +35,7 @@ pub trait Booter: Sized {
     fn register_boot_slots(
         &mut self, esp_partition_number: u32, esp_starting_lba: u64, esp_ending_lba: u64,
         esp_unique_partition_guid: [u8; 16], to_slot: &str, from_slot: &str,
-    ) -> Result<(), Self::Error> {
-        let _ = (
-            esp_partition_number,
-            esp_starting_lba,
-            esp_ending_lba,
-            esp_unique_partition_guid,
-            to_slot,
-            from_slot,
-        );
-
-        Ok(())
-    }
+    ) -> Result<(), Self::Error>;
 }
 
 #[repr(C)]
