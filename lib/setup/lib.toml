@@ -22,10 +22,16 @@ wipefs_bin = "wipefs"
 # partition.settle_attempts/settle_interval_ms bound how long DiskLayout::create waits for the
 # kernel (via udev) to create the new partition device nodes after BLKRRPART, before giving up —
 # the ioctl itself is synchronous, but the /dev/vdaN nodes it triggers are created by udev
-# asynchronously afterward.
+# asynchronously afterward. esp_label/deploy_label name both the GPT partition entry itself
+# (DiskLayout::create) and the filesystem volume label written at format time
+# (TargetSysroot::create_whole_disk) — purely informational (`lsblk -f`/`blkid`/other OS
+# installers), nothing in this codebase looks a partition up by either. Uppercase by the same
+# convention real-world ESP volume labels always use.
 [partition]
 settle_attempts = 50
 settle_interval_ms = 100
+esp_label = "ESP"
+deploy_label = "UPAC-DEPLOY"
 
 # genesis.scratch_filename is where the freshly-built package database is
 # written (under the OS temp dir) before being embedded into the new /usr
@@ -35,6 +41,14 @@ settle_interval_ms = 100
 # has no Boot#### entries at all, which is exactly genesis's situation on a brand-new disk. The
 # resolved boot plugin's own `esp_loader_source()` (see `booters/booter.toml`) says which source
 # path — if any — a fresh ESP needs it copied from; genesis only owns the destination.
+# efi_linux_dir is a real, mounted-filesystem-relative path (forward slashes, joined via
+# `Path::join`) to where `composefs-boot`'s own UKI writer always lands `upac-to.efi`/
+# `upac-from.efi` (`EFI/Linux/`, hardcoded upstream) — used only to seed `upac-from.efi` with the
+# same first image on genesis's very first deploy. Distinct from `booters/booter.toml`'s
+# `uki.efi_linux_dir`, which is the same directory spelled as a backslash UEFI device-path string
+# for NVRAM Boot#### entries, not a filesystem path — the two can't share a definition across the
+# crate boundary.
 [genesis]
 scratch_filename = "genesis-packages.redb"
 esp_fallback_loader = "EFI/BOOT/BOOTX64.EFI"
+efi_linux_dir = "EFI/Linux"

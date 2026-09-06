@@ -87,6 +87,10 @@ impl SetupExistingData<'_> {
             Path::new(self.esp_device),
             PathBuf::from(self.mount_point()),
             &self.extra_mounts,
+            None,
+            None,
+            None,
+            None,
         )
         .map_err(|error| (GenesisStage::Setup, error))?;
 

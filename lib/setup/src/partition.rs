@@ -17,7 +17,7 @@ use upac_types::PartitionSpec;
 
 use crate::error::SetupError;
 use crate::format::FormatTarget;
-use crate::layout::partition::{SETTLE_ATTEMPTS, SETTLE_INTERVAL_MS};
+use crate::layout::partition::{DEPLOY_LABEL, ESP_LABEL, SETTLE_ATTEMPTS, SETTLE_INTERVAL_MS};
 
 #[cfg(test)]
 #[path = "../tests/inline/partition.rs"]
@@ -106,7 +106,7 @@ impl DiskLayout {
         let esp_entry = gpt.insert_partition(
             esp_partition,
             ESP_PARTITION_TYPE_GUID,
-            "ESP",
+            ESP_LABEL,
             mib_to_sectors!(esp_size_mib, sector_size),
         )?;
         next_number += 1;
@@ -115,7 +115,7 @@ impl DiskLayout {
         gpt.insert_partition(
             deploy_partition,
             LINUX_ROOT_X86_64_GUID,
-            "upac-deploy",
+            DEPLOY_LABEL,
             mib_to_sectors!(deploy_size_mib, sector_size),
         )?;
         next_number += 1;

@@ -17,11 +17,14 @@ use upac::layout::deployment::{DEPLOYS_DIR, NEXT_SEQ_PATH, REPO_DIR};
 
 use upac_abi::FsKind;
 
+use uuid::Uuid;
+
 use upac_types::PartitionMount;
 
 use crate::data::SetupWholeDiskData;
 use crate::error::SetupError;
 use crate::format::FormatTarget;
+use crate::layout::partition::{DEPLOY_LABEL, ESP_LABEL};
 use crate::partition::DiskLayout;
 
 pub struct TargetSysroot {
@@ -29,12 +32,17 @@ pub struct TargetSysroot {
     deploy_dir: PathBuf,
     repository: ManuallyDrop<Repository<ObjectID>>,
     mounted: Vec<PathBuf>,
+    esp_partition_number: Option<u32>,
+    esp_starting_lba: Option<u64>,
+    esp_ending_lba: Option<u64>,
+    esp_unique_partition_guid: Option<Uuid>,
 }
 
 impl TargetSysroot {
     pub fn new(
         deploy_device: &Path, deploy_fs: FsKind, esp_device: &Path, mount_point: PathBuf,
-        extra_mounts: &[PartitionMount],
+        extra_mounts: &[PartitionMount], esp_partition_number: Option<u32>, esp_starting_lba: Option<u64>,
+        esp_ending_lba: Option<u64>, esp_unique_partition_guid: Option<Uuid>,
     ) -> Result<Self, SetupError> {
         create_dir_all(&mount_point)?;
 
@@ -84,6 +92,10 @@ impl TargetSysroot {
             deploy_dir,
             repository: ManuallyDrop::new(repository),
             mounted,
+            esp_partition_number,
+            esp_starting_lba,
+            esp_ending_lba,
+            esp_unique_partition_guid,
         })
     }
 
@@ -97,16 +109,17 @@ impl TargetSysroot {
         )?;
 
         let esp_path = layout.esp_path();
+
         FormatTarget {
             device_path: &esp_path,
-            label: Some("ESP"),
+            label: Some(ESP_LABEL),
         }
         .format_esp()?;
 
         let deploy_path = layout.deploy_path();
         FormatTarget {
             device_path: &deploy_path,
-            label: Some("upac-deploy"),
+            label: Some(DEPLOY_LABEL),
         }
         .format(data.deploy_fs, data.node_size, data.sector_size, data.force_wipe)?;
 
@@ -133,6 +146,10 @@ impl TargetSysroot {
             &esp_path,
             PathBuf::from(data.mount_point()),
             &extra_mounts,
+            Some(layout.esp_partition_number()),
+            Some(layout.esp_starting_lba()),
+            Some(layout.esp_ending_lba()),
+            Some(layout.esp_unique_partition_guid()),
         )
     }
 
@@ -151,6 +168,22 @@ impl TargetSysroot {
     pub fn esp_mount_point(&self) -> PathBuf {
         self.mount_point.join(ESP_MOUNT_PRIMARY.trim_start_matches('/'))
     }
+
+    pub fn esp_partition_number(&self) -> Option<u32> {
+        self.esp_partition_number
+    }
+
+    pub fn esp_starting_lba(&self) -> Option<u64> {
+        self.esp_starting_lba
+    }
+
+    pub fn esp_ending_lba(&self) -> Option<u64> {
+        self.esp_ending_lba
+    }
+
+    pub fn esp_unique_partition_guid(&self) -> Option<Uuid> {
+        self.esp_unique_partition_guid
+    }
 }
 
 #[cfg(test)]
@@ -168,6 +201,10 @@ impl TargetSysroot {
             deploy_dir,
             repository: ManuallyDrop::new(repository),
             mounted: Vec::new(),
+            esp_partition_number: None,
+            esp_starting_lba: None,
+            esp_ending_lba: None,
+            esp_unique_partition_guid: None,
         })
     }
 }
