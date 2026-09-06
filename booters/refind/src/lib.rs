@@ -6,7 +6,7 @@
 use std::str::from_utf8;
 
 use upac_abi::BOOT_ABI_VERSION;
-use upac_abi::boot::{Booter, CBootPluginRequest};
+use upac_abi::boot::{Booter, CBootPluginRequest, CBootSlotsRequest};
 use upac_abi::error::ErrorKind;
 use upac_abi::types::{CBorrowed, CSlice};
 
@@ -81,6 +81,13 @@ pub unsafe extern "C" fn confirm_boot(request: *const CBootPluginRequest, err_ou
             -1
         }
     }
+}
+
+/// # Safety
+/// Touches no pointers — grub has no Boot#### entries to register, always succeeds.
+#[cfg_attr(feature = "cdylib", unsafe(no_mangle))]
+pub unsafe extern "C" fn register_boot_slots(_request: *const CBootSlotsRequest, _err_out: *mut ErrorKind) -> i32 {
+    0
 }
 
 fn entry_name_from_request(request: &CBootPluginRequest) -> Result<String, RefindError> {
