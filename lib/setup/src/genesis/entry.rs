@@ -46,6 +46,9 @@ impl Stage<SetupError> for StageBootStage {
 
         let plugin = resolve_boot_plugin(BOOT_PLUGINS_DIR, MANIFEST_EXTENSION, input.boot_plugin.as_deref())?;
 
+        let esp_mount_point = target.esp_mount_point().to_string_lossy().into_owned();
+        plugin.install(&esp_mount_point)?;
+
         if let Some(candidate) = plugin.esp_loader_source() {
             let handle = FileHandle::new(candidate);
             if handle.stat_in_tree(&prefix_tree).is_ok() {
