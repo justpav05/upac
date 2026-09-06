@@ -28,10 +28,11 @@ wipefs_bin = "wipefs"
 # installers), nothing in this codebase looks a partition up by either. Uppercase by the same
 # convention real-world ESP volume labels always use.
 [partition]
-settle_attempts = 50
-settle_interval_ms = 100
 esp_label = "ESP"
 deploy_label = "UPAC-DEPLOY"
+
+settle_attempts = 50
+settle_interval_ms = 100
 
 # genesis.scratch_filename is where the freshly-built package database is
 # written (under the OS temp dir) before being embedded into the new /usr
